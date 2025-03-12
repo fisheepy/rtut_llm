@@ -218,25 +218,30 @@ def chat():
             results.append(metadata_store[idx])
 
     if not results:
-        return jsonify({"answer": "No relevant policy found. Please contact HR."})
+        return jsonify({
+            "answer": "I'm not sure about that, but feel free to ask HR for more details! 😊"
+        })
 
     context = "\n\n".join([f"**{r['name']}**: {r['text']}" for r in results])
 
     try:
         response = openai.chat.completions.create(
             model="gpt-4",
-            messages=[{"role": "user", "content": f"Question: {question}\n\nRelevant Policy: {context}"}],
-            temperature=0.2
+            messages=[
+                {"role": "system", "content": "You are Rola, a friendly and helpful chatbot that assists employees in understanding company policies. Always respond in a warm and approachable tone."},
+                {"role": "user", "content": f"Hi Rola, I have a question: {question}\n\nHere are some related policies:\n{context}"}
+            ],
+            temperature=0.5
         )
 
         return jsonify({
-            "answer": response.choices[0].message.content,
+            "answer": f"🤖 Rola: {response.choices[0].message.content}",
             "referenced_documents": list(set([r["name"] for r in results]))
         })
 
     except openai._exceptions.OpenAIError as e:
         print(f"❌ OpenAI Error: {e}")
-        return jsonify({"error": "AI processing error. Please try again later."}), 500
+        return jsonify({"error": "Oops! Something went wrong. Try again later. 😞"}), 500
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5001))  # ✅ Use Heroku's assigned port
