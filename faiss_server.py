@@ -200,42 +200,46 @@ def chat():
 
     data = request.json
     question = data.get("question")
+    style = data.get("style", "friendly").lower()  # Default to friendly
 
     if not question:
         return jsonify({"error": "Missing question"}), 400
 
+    # Get embedding for user query
     query_embedding = get_embedding(question)
-    
     if query_embedding is None:
         return jsonify({"error": "Failed to generate embedding. Check OpenAI API key."}), 500
 
     # Search FAISS index
     distances, indices = index.search(np.array([query_embedding], dtype=np.float32), k=3)
+    results = [metadata_store[idx] for idx in indices[0] if idx < len(metadata_store)]
 
-    results = []
-    for idx in indices[0]:
-        if idx < len(metadata_store):
-            results.append(metadata_store[idx])
-
-    if not results:
-        return jsonify({
-            "answer": "I'm not sure about that, but feel free to ask HR for more details! 😊"
-        })
-
+    # Construct context from retrieved docs
     context = "\n\n".join([f"**{r['name']}**: {r['text']}" for r in results])
+
+    # Define system prompts by style
+    SYSTEM_PROMPTS = {
+        "friendly": "You are Roy Bot, a friendly and helpful chatbot that assists employees in understanding company policies. Always respond in a warm, approachable, and cheerful tone.",
+        "professional": "You are Roy Bot, a professional HR policy advisor. Provide precise, clear, and formal answers with references to relevant company policies. Avoid casual language.",
+        "strict": "You are Roy Bot, a no-nonsense safety and compliance advisor. Answer concisely, directly, and in a serious tone. Emphasize the importance of following rules.",
+        "default": "You are Roy Bot, a helpful chatbot that assists employees in understanding company policies."
+    }
+
+    # Pick the appropriate system prompt
+    system_prompt = SYSTEM_PROMPTS.get(style, SYSTEM_PROMPTS["default"])
 
     try:
         response = openai.chat.completions.create(
             model="gpt-4",
             messages=[
-                {"role": "system", "content": "You are Rola, a friendly and helpful chatbot that assists employees in understanding company policies. Always respond in a warm and approachable tone."},
-                {"role": "user", "content": f"Hi Rola, I have a question: {question}\n\nHere are some related policies:\n{context}"}
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Hi Roy Bot, I have a question: {question}\n\nHere are some related policies:\n{context}"}
             ],
-            temperature=0.5
+            temperature=0.5 if style != "strict" else 0.2  # lower temp for stricter tone
         )
 
         return jsonify({
-            "answer": f"🤖 Rola: {response.choices[0].message.content}",
+            "answer": f"🤖 Roy Bot: {response.choices[0].message.content}",
             "referenced_documents": list(set([r["name"] for r in results]))
         })
 
