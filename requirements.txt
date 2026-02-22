@@ -6,3 +6,6 @@ openai
 boto3
 python-docx
 numpy
+
+pytest
+requests
