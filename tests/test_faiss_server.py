@@ -46,18 +46,12 @@ def test_chat_happy_path_with_basic_question(monkeypatch):
         def search(self, _query_embedding, k=3):
             return [[0.01]], [[0]]
 
-    class DummyMessage:
-        content = "You can request leave by submitting a leave form."
-
-    class DummyChoice:
-        message = DummyMessage()
-
     class DummyResponse:
-        choices = [DummyChoice()]
+        output_text = "You can request leave by submitting a leave form."
 
     monkeypatch.setattr(server, "index", DummyIndex())
     monkeypatch.setattr(server, "get_embedding", lambda _text: [0.0] * 1536)
-    monkeypatch.setattr(server.openai.chat.completions, "create", lambda **_kwargs: DummyResponse())
+    monkeypatch.setattr(server.openai.responses, "create", lambda **_kwargs: DummyResponse())
 
     response = client.post(
         "/chat",

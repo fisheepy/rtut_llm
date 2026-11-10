@@ -27,6 +27,7 @@ s3 = boto3.client(
 
 # ✅ Load OpenAI API Key
 openai.api_key = os.getenv("OPENAI_API_KEY")
+ROY_BOT_MODEL = os.getenv("ROY_BOT_MODEL", "gpt-6-luna")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # Gets the `/backend/server/llm/` path
 INDEX_PATH = os.path.join(BASE_DIR, "faiss_index.bin")
 METADATA_PATH = os.path.join(BASE_DIR, "metadata_store.json")
@@ -229,22 +230,26 @@ def chat():
     system_prompt = SYSTEM_PROMPTS.get(style, SYSTEM_PROMPTS["default"])
 
     try:
-        response = openai.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Hi Roy Bot, I have a question: {question}\n\nHere are some related policies:\n{context}"}
-            ],
-            temperature=0.5 if style != "strict" else 0.2  # lower temp for stricter tone
+        response = openai.responses.create(
+            model=ROY_BOT_MODEL,
+            instructions=system_prompt,
+            input=f"Hi Roy Bot, I have a question: {question}\n\nHere are some related policies:\n{context}",
         )
 
+        answer = (response.output_text or "").strip()
+        if not answer:
+            raise RuntimeError("OpenAI returned an empty answer")
+
         return jsonify({
-            "answer": f"🤖 Roy Bot: {response.choices[0].message.content}",
+            "answer": f"🤖 Roy Bot: {answer}",
             "referenced_documents": list(set([r["name"] for r in results]))
         })
 
     except openai._exceptions.OpenAIError as e:
-        print(f"❌ OpenAI Error: {e}")
+        print(f"❌ OpenAI Error ({type(e).__name__}) using {ROY_BOT_MODEL}: {e}")
+        return jsonify({"error": "Roy Bot is temporarily unavailable. Please try again shortly."}), 500
+    except Exception as e:
+        print(f"❌ Roy Bot Error ({type(e).__name__}) using {ROY_BOT_MODEL}: {e}")
         return jsonify({"error": "Oops! Something went wrong. Try again later. 😞"}), 500
 
 if __name__ == "__main__":
