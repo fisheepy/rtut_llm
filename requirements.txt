@@ -6,6 +6,7 @@ openai
 boto3
 python-docx
 numpy
+tqdm
 
 pytest
 requests
